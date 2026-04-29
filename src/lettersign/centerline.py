@@ -25,8 +25,8 @@ from shapely.ops import unary_union
 from svgpathtools import svg2paths2
 
 
-def main() -> None:
-    args = parse_args()
+def run_centerline(args: argparse.Namespace) -> None:
+    """Run centerline generation from a populated argparse namespace (preset applied)."""
     apply_preset(args)
     svg_path = Path(args.svg)
     output_path = args.output or svg_path.with_name(f"{svg_path.stem}.centerline.svg")
@@ -40,7 +40,7 @@ def main() -> None:
         log(args.verbose, f"Simplifying input polygons by {args.input_simplify:g}")
         shape = shape.simplify(args.input_simplify, preserve_topology=True)
     log(args.verbose, "Computing centerline")
-    centerline = compute_centerline(
+    centerline_geom = compute_centerline(
         shape,
         densify_distance=args.densify_distance,
         min_branch_length=args.min_branch_length,
@@ -54,7 +54,7 @@ def main() -> None:
         render_debug_svg(
             view_box,
             shape,
-            centerline,
+            centerline_geom,
             use_bezier=not args.no_bezier,
             bezier_tension=args.bezier_tension,
         ),
@@ -62,8 +62,12 @@ def main() -> None:
     )
     print(f"Wrote {output_path}")
     print(f"Shape area: {shape.area:.1f}")
-    print(f"Centerline length: {centerline.length:.1f}")
+    print(f"Centerline length: {centerline_geom.length:.1f}")
     print(f"Elapsed: {time.perf_counter() - started_at:.2f}s")
+
+
+def main() -> None:
+    run_centerline(parse_args())
 
 
 def parse_args() -> argparse.Namespace:
