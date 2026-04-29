@@ -15,3 +15,7 @@ uv run lettersign path/to/letter.svg --preset fast -o debug.svg
 ```
 
 The tool writes a debug SVG overlaying the filled shape and a computed centerline trace.
+
+## License
+
+Released under the [MIT License](LICENSE).

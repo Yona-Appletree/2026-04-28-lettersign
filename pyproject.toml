@@ -7,6 +7,7 @@ name = "lettersign"
 version = "0.1.0"
 description = "SVG letter sign tooling (centerlines for LED layouts)"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.14"
 dependencies = [
     "pygeoops>=0.6.0",
