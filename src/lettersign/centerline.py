@@ -2,20 +2,11 @@
 """
 Generate an approximate centerline for a filled SVG path.
 
-Install dependencies:
+Writes a debug SVG with the filled shape and centerline overlay. Intended for
+LED channel layout experiments.
 
-    python3 -m pip install svgpathtools shapely pygeoops
-
-Example:
-
-    python3 svg_centerline.py Y.svg
-    python3 svg_centerline.py Y.svg --preset fast
-    python3 svg_centerline.py Y.svg --flatness 0.5 --min-branch-length 20 --simplify 1
-    python3 svg_centerline.py Y.svg --bezier-tension 0.7
-
-The output is a debug SVG containing the original filled shape and the computed
-centerline. This is intended as an experiment for LED channel layout, not as a
-final CAD pipeline.
+Example: uv run lettersign Y.svg
+Example: uv run lettersign --preset fast Y.svg
 """
 
 from __future__ import annotations
@@ -24,8 +15,8 @@ import argparse
 import math
 import re
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 from xml.etree import ElementTree
 
 import pygeoops
@@ -211,9 +202,13 @@ def estimate_segment_length(segment, samples: int = 8) -> float:
     return total
 
 
-def build_shape_from_nested_rings(rings: Iterable[list[tuple[float, float]]]) -> Polygon | MultiPolygon:
+def build_shape_from_nested_rings(
+    rings: Iterable[list[tuple[float, float]]],
+) -> Polygon | MultiPolygon:
     ring_polygons = [Polygon(ring).buffer(0) for ring in rings]
-    ring_polygons = [polygon for polygon in ring_polygons if not polygon.is_empty and polygon.area > 0]
+    ring_polygons = [
+        polygon for polygon in ring_polygons if not polygon.is_empty and polygon.area > 0
+    ]
 
     if not ring_polygons:
         raise ValueError("SVG contours did not produce any valid polygons")
@@ -230,7 +225,9 @@ def build_shape_from_nested_rings(rings: Iterable[list[tuple[float, float]]]) ->
                 and other.contains(polygon.representative_point())
             )
         ]
-        parent_by_index[index] = min(containing, key=lambda item: item[1])[0] if containing else None
+        parent_by_index[index] = (
+            min(containing, key=lambda item: item[1])[0] if containing else None
+        )
 
     polygons = []
     for index, polygon in enumerate(ring_polygons):
@@ -326,11 +323,16 @@ def render_debug_svg(
 ) -> str:
     min_x, min_y, width, height = view_box
     shape_path = geometry_to_svg_path(shape)
-    centerline_path = geometry_to_svg_path(centerline, smooth_lines=use_bezier, bezier_tension=bezier_tension)
+    centerline_path = geometry_to_svg_path(
+        centerline,
+        smooth_lines=use_bezier,
+        bezier_tension=bezier_tension,
+    )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="{min_x:g} {min_y:g} {width:g} {height:g}">
   <path d="{shape_path}" fill="#231f20" fill-opacity="0.18" stroke="#231f20" stroke-width="2"/>
-  <path d="{centerline_path}" fill="none" stroke="#ff2d55" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="{centerline_path}" fill="none" stroke="#ff2d55" stroke-width="8"
+    stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 """
 
@@ -396,10 +398,7 @@ def catmull_rom_to_bezier_path(coords, tension: float) -> str:
         c1 = add_points(p1, scale_point(subtract_points(p2, p0), tension / 6.0))
         c2 = subtract_points(p2, scale_point(subtract_points(p3, p1), tension / 6.0))
         commands.append(
-            "C "
-            f"{c1[0]:.3f} {c1[1]:.3f}, "
-            f"{c2[0]:.3f} {c2[1]:.3f}, "
-            f"{p2[0]:.3f} {p2[1]:.3f}"
+            f"C {c1[0]:.3f} {c1[1]:.3f}, {c2[0]:.3f} {c2[1]:.3f}, {p2[0]:.3f} {p2[1]:.3f}"
         )
 
     return " ".join(commands)
