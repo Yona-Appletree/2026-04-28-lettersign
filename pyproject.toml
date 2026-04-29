@@ -1,0 +1,11 @@
+[project]
+name = "sign"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pygeoops>=0.6.0",
+    "shapely>=2.1.2",
+    "svgpathtools>=1.7.2",
+]
