@@ -94,12 +94,73 @@ def test_invalid_project_name_exits_nonzero(tmp_path: Path) -> None:
     assert exc.value.code == 1
 
 
-def test_watch_is_stub(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    cli.main(["-p", str(tmp_path), "watch", "demo"])
+def test_watch_fails_when_svg_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli.main(["-p", str(tmp_path), "init", "demo"])
 
-    out = capsys.readouterr().out
-    assert "M4" in out
-    assert "demo" in out
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-p", str(tmp_path), "watch", "demo", "--once"])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Missing input SVG" in err
+    assert "demo.svg" in err
+
+
+def test_watch_once_writes_same_generated_outputs_as_build(tmp_path: Path) -> None:
+    """`watch --once` uses the same pipeline as `build` for generated artifacts."""
+    cli.main(["-p", str(tmp_path), "init", "demo"])
+    svg = tmp_path / "demo" / "demo.svg"
+    svg.write_text(MINIMAL_CLOSED_SVG, encoding="utf-8")
+
+    cli.main(["-p", str(tmp_path), "build", "demo"])
+    after_build = {
+        "centerline": (tmp_path / "demo" / "demo.centerline.svg").read_text(encoding="utf-8"),
+        "data": (tmp_path / "demo" / "demo_data.scad").read_text(encoding="utf-8"),
+        "common": (tmp_path / "lettersign_common.scad").read_text(encoding="utf-8"),
+        "wrapper": (tmp_path / "demo" / "demo.scad").read_text(encoding="utf-8"),
+    }
+    for path in (
+        tmp_path / "demo" / "demo.centerline.svg",
+        tmp_path / "demo" / "demo_data.scad",
+        tmp_path / "lettersign_common.scad",
+        tmp_path / "demo" / "demo.scad",
+    ):
+        path.unlink()
+
+    cli.main(["-p", str(tmp_path), "watch", "demo", "--once"])
+
+    assert (tmp_path / "demo" / "demo.centerline.svg").read_text(encoding="utf-8") == after_build[
+        "centerline"
+    ]
+    assert (tmp_path / "demo" / "demo_data.scad").read_text(encoding="utf-8") == after_build["data"]
+    assert (tmp_path / "lettersign_common.scad").read_text(encoding="utf-8") == after_build[
+        "common"
+    ]
+    assert (tmp_path / "demo" / "demo.scad").read_text(encoding="utf-8") == after_build["wrapper"]
+
+
+def test_watch_rejects_non_positive_interval(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-p", str(tmp_path), "watch", "demo", "--interval", "0"])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "interval" in err.lower()
+
+
+def test_watch_rejects_negative_debounce(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["-p", str(tmp_path), "watch", "demo", "--debounce", "-1"])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "debounce" in err.lower()
 
 
 def test_top_level_help_shows_project_cli(capsys: pytest.CaptureFixture[str]) -> None:

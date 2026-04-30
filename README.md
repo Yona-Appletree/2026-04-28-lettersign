@@ -15,6 +15,8 @@ uv run lettersign build myletter
 uv run lettersign watch myletter
 ```
 
+Watch options (`--interval`, `--debounce`, `--once`) are documented under **Commands**.
+
 Examples with a custom projects root:
 
 ```bash
@@ -26,29 +28,29 @@ uv run lettersign --projects-root /path/to/projects build demo
 
 - **`init <name>`** - Creates `projects/<name>/` if needed, creates or updates `<name>.toml` with defaults (preserving existing values and comments), and prints the expected input SVG path if `<name>.svg` is not present yet.
 - **`build <name>`** - Resolves paths, loads or creates the config, requires `<name>.svg`, and runs the project pipeline: normalize SVG geometry to millimeters (using physical SVG units when present, otherwise `1` SVG unit = `1` mm), compute the LED centerline and post markers, then write outputs described below (centerline preview, OpenSCAD data, and shared helper). The SVG preview uses a fixed style; it does **not** copy fills or strokes from the source SVG.
-- **`watch <name>`** - Resolves the project and config only. A real file-watch loop is **not** implemented yet; the command prints that automatic rebuilds are planned for milestone 4 (M4).
+- **`watch <name>`** - Runs the same pipeline as `build` for an **initial** build (so generated outputs match a one-shot build), then optionally keeps running. Uses **stdlib polling** only on `<name>.svg` and `<name>.toml` (`--interval SECONDS`, default `0.5`). After either file changes, waits `--debounce SECONDS` (default `0.2`) before rebuilding. Each rebuild regenerates `<name>.centerline.svg`, `<name>_data.scad`, and `projects/lettersign_common.scad` only; `<name>.scad` stays user-owned once it exists (created on first missing, never overwritten); TOML is updated by merging defaults and **preserving** existing values and comments. Missing SVG at startup exits with an error like `build`. **`--once`** performs the initial build and exits with no watch loop (handy for scripts and tests). Expected `LettersignError` failures **after** the initial build print a concise message to stderr and watching continues (useful during transient partial saves).
 
 ### Centerline preview (`<name>.centerline.svg`)
 
-After `lettersign build <name>`, the generated file is a **normalized** preview intended for layout and mounting planning:
+After `lettersign build <name>` (or each `watch`-triggered regeneration), the generated file is a **normalized** preview intended for layout and mounting planning:
 
 - **Outlines** - black stroke, no fill (input paths in lower-left mm space).
 - **Centerline** - red stroke; stroke width follows `led_channel_width` from `<name>.toml`.
 - **Post markers** - green circles with **5 mm** radius at centerline endpoints and branch/intersection points.
 
-### OpenSCAD output (`build`)
+### OpenSCAD output (`build` / `watch`)
 
-`lettersign build <name>` also writes OpenSCAD for a first-pass printable letter model:
+`lettersign build <name>` (and each successful **`watch`** rebuild after input changes) writes OpenSCAD for a first-pass printable letter model:
 
-- **`projects/<name>/<name>.centerline.svg`** - normalized preview (regenerated every build).
-- **`projects/<name>/<name>_data.scad`** - generated geometry data (regenerated every build). Includes `use <../lettersign_common.scad>` for shared post helpers.
-- **`projects/lettersign_common.scad`** - shared helper at the projects root (written/updated every build). One copy for all projects under that root.
-- **`projects/<name>/<name>.scad`** - user-editable wrapper: **created only if the file is missing**. Later builds do not overwrite it.
+- **`projects/<name>/<name>.centerline.svg`** - normalized preview (regenerated every build or watch-triggered rebuild).
+- **`projects/<name>/<name>_data.scad`** - generated geometry data (regenerated every build or watch-triggered rebuild). Includes `use <../lettersign_common.scad>` for shared post helpers.
+- **`projects/lettersign_common.scad`** - shared helper at the projects root (written/updated every build/rebuild). One copy for all projects under that root.
+- **`projects/<name>/<name>.scad`** - user-editable wrapper: **created only if the file is missing**. Later builds and watch rebuilds do not overwrite it.
 
 **Generated vs user-owned**
 
-- **Regenerated on each `build`**: `<name>.centerline.svg`, `<name>_data.scad`, and `projects/lettersign_common.scad`.
-- **User-owned / preserved**: `<name>.svg`; `<name>.toml` (the tool merges defaults but keeps existing values and comments); `<name>.scad` once that wrapper file exists (later builds never overwrite it).
+- **Regenerated on each `build`** (and each `watch` rebuild after a watched-file change): `<name>.centerline.svg`, `<name>_data.scad`, and `projects/lettersign_common.scad`.
+- **User-owned / preserved**: `<name>.svg`; `<name>.toml` (the tool merges defaults but keeps existing values and comments); `<name>.scad` once that wrapper file exists (later builds and watch-triggered rebuilds never overwrite it).
 
 For each source path in the SVG (`path1`, `path2`, ...), the data file defines modules:
 
@@ -76,13 +78,13 @@ The tool merges defaults into an existing file and preserves user edits where pr
 
 ```text
 projects/
-|-- lettersign_common.scad # shared OpenSCAD helper (generated/updated by `build`)
+|-- lettersign_common.scad # shared OpenSCAD helper (`build` / `watch` rebuild)
 `-- <name>/
-    |-- <name>.svg             # user-authored input artwork (required for build)
+    |-- <name>.svg             # user-authored input artwork (required for build/watch start)
     |-- <name>.toml            # project config (created/updated by the tool)
-    |-- <name>.centerline.svg  # generated preview (`build`)
-    |-- <name>_data.scad       # generated OpenSCAD data (`build`)
-    `-- <name>.scad            # user wrapper: created on first `build` if missing, then preserved
+    |-- <name>.centerline.svg  # generated preview (`build`, `watch` on change)
+    |-- <name>_data.scad       # generated OpenSCAD data (`build`, `watch` on change)
+    `-- <name>.scad            # user wrapper: created on first missing file at build/watch, then preserved
 ```
 
 ## Legacy: raw SVG invocation

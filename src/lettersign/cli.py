@@ -11,6 +11,7 @@ from lettersign.config import load_or_create_config
 from lettersign.errors import LettersignError, MissingInputSvgError
 from lettersign.pipeline import build_centerline_preview
 from lettersign.project import resolve_project
+from lettersign.watcher import WatchSettings, watch_project
 
 
 def split_projects_root(argv: list[str]) -> tuple[Path, list[str]]:
@@ -77,13 +78,10 @@ def cmd_build(project_name: str, projects_root: Path) -> None:
     print(f"Wrote centerline preview to {out_path}")
 
 
-def cmd_watch(project_name: str, projects_root: Path) -> None:
+def cmd_watch(project_name: str, projects_root: Path, settings: WatchSettings) -> None:
     paths = resolve_project(project_name, projects_root=projects_root)
-    load_or_create_config(paths.config_toml)
-    print(
-        "Watch mode (automatic rebuild on file changes) is planned for milestone 4 (M4). "
-        f"Project {project_name!r} and config at {paths.config_toml} are ready."
-    )
+    paths.project_dir.mkdir(parents=True, exist_ok=True)
+    watch_project(paths, settings=settings)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -104,12 +102,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     p_watch = sub.add_parser(
         "watch",
-        help="Validate project layout (watch loop arrives in M4).",
+        help="Rebuild when the input SVG or TOML config changes (stdlib polling).",
     )
     p_watch.add_argument(
         "name",
         metavar="NAME",
         help="Project name (single path segment).",
+    )
+    p_watch.add_argument(
+        "--interval",
+        type=float,
+        default=0.5,
+        metavar="SECONDS",
+        help="Polling interval in seconds (default: 0.5).",
+    )
+    p_watch.add_argument(
+        "--debounce",
+        type=float,
+        default=0.2,
+        metavar="SECONDS",
+        help="Delay after a change before rebuilding (default: 0.2).",
+    )
+    p_watch.add_argument(
+        "--once",
+        action="store_true",
+        help="Run the initial build and exit (no polling loop).",
     )
 
     return parser
@@ -137,7 +154,12 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "build":
             cmd_build(args.name, projects_root)
         elif args.command == "watch":
-            cmd_watch(args.name, projects_root)
+            watch_settings = WatchSettings(
+                interval_seconds=args.interval,
+                debounce_seconds=args.debounce,
+                once=args.once,
+            )
+            cmd_watch(args.name, projects_root, watch_settings)
         else:  # pragma: no cover - argparse enforces choices
             parser.print_help(file=sys.stderr)
             raise SystemExit(2)
