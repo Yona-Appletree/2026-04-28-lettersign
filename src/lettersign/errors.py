@@ -15,3 +15,7 @@ class InvalidConfigError(LettersignError):
 
 class MissingInputSvgError(LettersignError):
     """Raised when a project build is requested but the input SVG is missing."""
+
+
+class InvalidSvgInputError(LettersignError):
+    """Raised when the input SVG cannot be read or has no usable geometry."""

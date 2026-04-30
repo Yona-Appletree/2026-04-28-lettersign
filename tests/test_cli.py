@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -35,12 +36,18 @@ def test_init_creates_layout_and_reports_svg(
     assert "demo.svg" in captured.err
 
 
-def test_build_fails_when_svg_missing(tmp_path: Path) -> None:
+def test_build_fails_when_svg_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     cli.main(["-p", str(tmp_path), "init", "demo"])
 
     with pytest.raises(SystemExit) as exc:
         cli.main(["-p", str(tmp_path), "build", "demo"])
     assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "Missing input SVG" in err
+    assert "demo.svg" in err
 
 
 def test_build_writes_centerline_when_svg_present(tmp_path: Path) -> None:
@@ -53,7 +60,20 @@ def test_build_writes_centerline_when_svg_present(tmp_path: Path) -> None:
     out_path = tmp_path / "demo" / "demo.centerline.svg"
     assert out_path.is_file()
     text = out_path.read_text(encoding="utf-8")
-    assert "<svg" in text
+    root = ElementTree.fromstring(text)
+    ns_suffix = "}path"
+    paths_el = [el for el in root.iter() if el.tag == "path" or el.tag.endswith(ns_suffix)]
+    assert len(paths_el) == 2
+    outline_path, centerline_path = paths_el
+    assert outline_path.get("fill") == "none"
+    assert outline_path.get("stroke") in ("#000000", "black")
+    assert centerline_path.get("fill") == "none"
+    assert centerline_path.get("stroke") in ("#ff0000", "red")
+    circles = [el for el in root.iter() if el.tag == "circle" or el.tag.endswith("}circle")]
+    assert len(circles) >= 1
+    for c in circles:
+        assert c.get("fill") == "#008000"
+        assert c.get("stroke") == "#008000"
 
 
 def test_invalid_project_name_exits_nonzero(tmp_path: Path) -> None:
@@ -85,6 +105,10 @@ def test_legacy_invokes_centerline_for_svg_args(tmp_path: Path) -> None:
     cli.main([str(svg), "--preset", "fast", "-o", str(output)])
 
     assert output.is_file()
+    legacy = output.read_text(encoding="utf-8")
+    # Legacy debug renderer uses translucent fill and pink stroke (not normalized preview).
+    assert 'fill-opacity="0.18"' in legacy
+    assert "#ff2d55" in legacy
 
 
 def test_missing_projects_root_flag_value() -> None:

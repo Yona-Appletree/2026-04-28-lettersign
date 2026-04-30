@@ -13,6 +13,10 @@ from tomlkit import TOMLDocument
 
 from lettersign.errors import InvalidConfigError
 
+# --- Preview / pipeline constants (not user TOML) ---------------------------
+
+PREVIEW_MARKER_RADIUS_MM = 5.0
+
 # --- Domain -----------------------------------------------------------------
 
 CONFIG_KEY_ORDER = (

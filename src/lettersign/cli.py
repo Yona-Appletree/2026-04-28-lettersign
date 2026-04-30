@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 
 from lettersign.centerline import main as centerline_main
-from lettersign.centerline import run_centerline
 from lettersign.config import load_or_create_config
 from lettersign.errors import LettersignError, MissingInputSvgError
+from lettersign.pipeline import build_centerline_preview
 from lettersign.project import resolve_project
 
 
@@ -52,24 +52,6 @@ def delegate_centerline_legacy(rest: list[str]) -> None:
         sys.argv = old
 
 
-def _build_centerline_namespace(svg: Path, output: Path) -> argparse.Namespace:
-    """Defaults aligned with `lettersign.centerline.parse_args()` after preset application."""
-    return argparse.Namespace(
-        svg=str(svg),
-        output=output,
-        preset="default",
-        flatness=None,
-        densify_distance=None,
-        min_branch_length=20.0,
-        simplify=None,
-        input_simplify=None,
-        no_bezier=False,
-        bezier_tension=1.0,
-        no_split_components=False,
-        verbose=False,
-    )
-
-
 def cmd_init(project_name: str, projects_root: Path) -> None:
     paths = resolve_project(project_name, projects_root=projects_root)
     paths.project_dir.mkdir(parents=True, exist_ok=True)
@@ -85,13 +67,14 @@ def cmd_init(project_name: str, projects_root: Path) -> None:
 def cmd_build(project_name: str, projects_root: Path) -> None:
     paths = resolve_project(project_name, projects_root=projects_root)
     paths.project_dir.mkdir(parents=True, exist_ok=True)
-    load_or_create_config(paths.config_toml)
+    config = load_or_create_config(paths.config_toml)
     if not paths.input_svg.is_file():
         raise MissingInputSvgError(
             f"Missing input SVG for project {project_name!r}: expected {paths.input_svg}. "
             "Run `lettersign init` or create that file, then try again."
         )
-    run_centerline(_build_centerline_namespace(paths.input_svg, paths.centerline_svg))
+    out_path = build_centerline_preview(paths, config)
+    print(f"Wrote centerline preview to {out_path}")
 
 
 def cmd_watch(project_name: str, projects_root: Path) -> None:

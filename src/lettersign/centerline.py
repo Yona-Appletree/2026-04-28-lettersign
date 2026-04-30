@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate an approximate centerline for a filled SVG path.
+Approximate centerlines for filled SVG paths using Shapely and pygeoops.
 
-Writes a debug SVG with the filled shape and centerline overlay. Intended for
-LED channel layout experiments.
+The legacy CLI renders a debug SVG (filled outline plus smoothed centerline).
+Project builds call ``generate_centerline_geometry`` with normalized ``SvgInput``.
 
-Example: uv run lettersign Y.svg
-Example: uv run lettersign --preset fast Y.svg
+Examples (legacy): ``uv run lettersign Y.svg``, ``uv run lettersign --preset fast Y.svg``.
 """
 
 from __future__ import annotations
@@ -16,13 +15,61 @@ import math
 import re
 import time
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree
 
 import pygeoops
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 from svgpathtools import svg2paths2
+
+from lettersign.geometry import SvgInput
+
+RenderableSvgGeometry = Polygon | MultiPolygon | LineString | MultiLineString | GeometryCollection
+
+
+@dataclass(frozen=True)
+class CenterlineGeometry:
+    """Filled outline and medial-axis centerline in millimeter coordinates."""
+
+    outline: Polygon | MultiPolygon
+    centerline: LineString | MultiLineString | GeometryCollection
+
+
+def generate_centerline_geometry(
+    svg_input: SvgInput,
+    *,
+    densify_distance: float,
+    min_branch_length: float,
+    simplify: float,
+    split_components: bool = True,
+    verbose: bool = False,
+) -> CenterlineGeometry:
+    """Build unioned outline from normalized paths and compute pygeoops centerline."""
+    rings: list[list[tuple[float, float]]] = []
+    for source in svg_input.source_paths:
+        for ring in source.rings:
+            if len(ring) < 4:
+                continue
+            rings.append([(p.x, p.y) for p in ring])
+    if not rings:
+        msg = (
+            "SvgInput has no closed rings with enough sampled points to build a filled shape "
+            f"(from {svg_input.path})"
+        )
+        raise ValueError(msg)
+    outline = build_shape_from_nested_rings(rings)
+    centerline = compute_centerline(
+        outline,
+        densify_distance=densify_distance,
+        min_branch_length=min_branch_length,
+        simplify=simplify,
+        split_components=split_components,
+        verbose=verbose,
+    )
+    return CenterlineGeometry(outline=outline, centerline=centerline)
 
 
 def run_centerline(args: argparse.Namespace) -> None:
@@ -182,7 +229,7 @@ def load_filled_shape(svg_path: Path, flatness: float, verbose: bool) -> Polygon
     return build_shape_from_nested_rings(rings)
 
 
-def flatten_subpath(subpath, flatness: float) -> list[tuple[float, float]]:
+def flatten_subpath(subpath: Any, flatness: float) -> list[tuple[float, float]]:
     points: list[tuple[float, float]] = []
     for segment in subpath:
         segment_length = estimate_segment_length(segment)
@@ -196,7 +243,7 @@ def flatten_subpath(subpath, flatness: float) -> list[tuple[float, float]]:
     return points
 
 
-def estimate_segment_length(segment, samples: int = 8) -> float:
+def estimate_segment_length(segment: Any, samples: int = 8) -> float:
     previous = complex_to_xy(segment.point(0.0))
     total = 0.0
     for index in range(1, samples + 1):
@@ -258,7 +305,7 @@ def compute_centerline(
     simplify: float,
     split_components: bool,
     verbose: bool,
-):
+) -> LineString | MultiLineString | GeometryCollection:
     if split_components:
         lines = []
         polygons = list_polygon_parts(shape)
@@ -295,7 +342,7 @@ def compute_single_centerline(
     densify_distance: float,
     min_branch_length: float,
     simplify: float,
-):
+) -> LineString | MultiLineString | GeometryCollection:
     try:
         centerline = pygeoops.centerline(
             shape,
@@ -320,8 +367,8 @@ def list_polygon_parts(shape: Polygon | MultiPolygon) -> list[Polygon]:
 
 def render_debug_svg(
     view_box: tuple[float, float, float, float],
-    shape,
-    centerline,
+    shape: Polygon | MultiPolygon,
+    centerline: LineString | MultiLineString | GeometryCollection,
     use_bezier: bool,
     bezier_tension: float,
 ) -> str:
@@ -341,7 +388,11 @@ def render_debug_svg(
 """
 
 
-def geometry_to_svg_path(geometry, smooth_lines: bool = False, bezier_tension: float = 1.0) -> str:
+def geometry_to_svg_path(
+    geometry: RenderableSvgGeometry,
+    smooth_lines: bool = False,
+    bezier_tension: float = 1.0,
+) -> str:
     if isinstance(geometry, Polygon):
         return polygon_to_svg_path(geometry)
     if isinstance(geometry, MultiPolygon):
