@@ -7,19 +7,23 @@ name = "lettersign"
 version = "0.1.0"
 description = "SVG letter sign tooling (centerlines for LED layouts)"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "pygeoops>=0.6.0",
     "shapely>=2.1.2",
     "svgpathtools>=1.7.2",
+    "tomlkit>=0.14.0",
 ]
 
 [project.scripts]
-lettersign = "lettersign.centerline:main"
+lettersign = "lettersign.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+lettersign = ["scad/*.scad"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.9"]
