@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPolygon, Polygon
+from shapely.ops import transform as transform_geometry
 
 from lettersign.centerline import geometry_to_svg_path
 from lettersign.geometry import Marker
@@ -30,8 +31,11 @@ def render_centerline_svg(
     """Return SVG markup with black outlines, red centerline, and green marker circles."""
     min_x, min_y, width, height = view_box
     vb = _format_view_box(min_x, min_y, width, height)
-    outline_d = geometry_to_svg_path(outlines)
-    centerline_d = geometry_to_svg_path(centerline, smooth_lines=False)
+    outline_d = geometry_to_svg_path(_to_svg_display_geometry(outlines, view_box))
+    centerline_d = geometry_to_svg_path(
+        _to_svg_display_geometry(centerline, view_box),
+        smooth_lines=False,
+    )
 
     lines: list[str] = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -41,7 +45,7 @@ def render_centerline_svg(
         "  " + _centerline_path_element(centerline_d, stroke_width=led_channel_width),
     ]
     for marker in markers:
-        lines.append("  " + _marker_circle_element(marker))
+        lines.append("  " + _marker_circle_element(marker, view_box=view_box))
     lines.append("</svg>")
     return "\n".join(lines) + "\n"
 
@@ -63,11 +67,23 @@ def _centerline_path_element(d: str, *, stroke_width: float) -> str:
     )
 
 
-def _marker_circle_element(marker: Marker) -> str:
+def _marker_circle_element(marker: Marker, *, view_box: tuple[float, float, float, float]) -> str:
     r = f"{marker.radius_mm:.6g}"
     cx = f"{marker.position.x:.6g}"
-    cy = f"{marker.position.y:.6g}"
+    cy = f"{_to_svg_display_y(marker.position.y, view_box):.6g}"
     return (
         f'<circle cx="{cx}" cy="{cy}" r="{r}" '
         f'fill="{_MARKER_FILL_STROKE}" stroke="{_MARKER_FILL_STROKE}"/>'
     )
+
+
+def _to_svg_display_geometry(
+    geometry: BaseGeometry,
+    view_box: tuple[float, float, float, float],
+) -> BaseGeometry:
+    return transform_geometry(lambda x, y, z=None: (x, _to_svg_display_y(y, view_box)), geometry)
+
+
+def _to_svg_display_y(y: float, view_box: tuple[float, float, float, float]) -> float:
+    _min_x, min_y, _width, height = view_box
+    return min_y + height - (y - min_y)

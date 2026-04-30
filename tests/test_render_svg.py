@@ -18,8 +18,8 @@ def _svg_elements(root: ElementTree.Element, local_name: str) -> list[ElementTre
 
 def test_render_centerline_svg_structure() -> None:
     outline = Polygon([(0, 0), (100, 0), (100, 100), (0, 100)])
-    centerline = LineString([(10, 10), (90, 90)])
-    markers = (Marker(position=Point(50.0, 50.0), radius_mm=PREVIEW_MARKER_RADIUS_MM),)
+    centerline = LineString([(10, 20), (90, 70)])
+    markers = (Marker(position=Point(50.0, 25.0), radius_mm=PREVIEW_MARKER_RADIUS_MM),)
     cfg = ProjectConfig()
 
     svg = render_centerline_svg(
@@ -47,6 +47,7 @@ def test_render_centerline_svg_structure() -> None:
 
     assert centerline_path.get("fill") == "none"
     assert centerline_path.get("stroke") in ("#ff0000", "red")
+    assert centerline_path.get("d") == "M 10.000 80.000 L 90.000 30.000"
     assert float(centerline_path.get("stroke-width", "0")) == cfg.led_channel_width
     assert centerline_path.get("stroke-linecap") == "round"
     assert centerline_path.get("stroke-linejoin") == "round"
@@ -56,7 +57,7 @@ def test_render_centerline_svg_structure() -> None:
     circle = circles[0]
     assert float(circle.get("r", "0")) == PREVIEW_MARKER_RADIUS_MM
     assert float(circle.get("cx", "0")) == 50.0
-    assert float(circle.get("cy", "0")) == 50.0
+    assert float(circle.get("cy", "0")) == 75.0
     assert circle.get("fill") == "#008000"
     assert circle.get("stroke") == "#008000"
 
