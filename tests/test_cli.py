@@ -75,6 +75,18 @@ def test_build_writes_centerline_when_svg_present(tmp_path: Path) -> None:
         assert c.get("fill") == "#008000"
         assert c.get("stroke") == "#008000"
 
+    data_scad = tmp_path / "demo" / "demo_data.scad"
+    wrapper_scad = tmp_path / "demo" / "demo.scad"
+    common_scad = tmp_path / "lettersign_common.scad"
+    assert data_scad.is_file()
+    assert wrapper_scad.is_file()
+    assert common_scad.is_file()
+    data_txt = data_scad.read_text(encoding="utf-8")
+    assert "use <../lettersign_common.scad>" in data_txt
+    assert "module path1_outline()" in data_txt
+    assert "use <demo_data.scad>" in wrapper_scad.read_text(encoding="utf-8")
+    assert "demo_3d();" in wrapper_scad.read_text(encoding="utf-8")
+
 
 def test_invalid_project_name_exits_nonzero(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
@@ -109,6 +121,9 @@ def test_legacy_invokes_centerline_for_svg_args(tmp_path: Path) -> None:
     # Legacy debug renderer uses translucent fill and pink stroke (not normalized preview).
     assert 'fill-opacity="0.18"' in legacy
     assert "#ff2d55" in legacy
+
+    assert list(tmp_path.glob("**/*_data.scad")) == []
+    assert list(tmp_path.glob("**/lettersign_common.scad")) == []
 
 
 def test_missing_projects_root_flag_value() -> None:

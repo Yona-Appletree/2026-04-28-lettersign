@@ -10,7 +10,9 @@ from lettersign.errors import InvalidSvgInputError
 from lettersign.geometry import SvgInput
 from lettersign.markers import detect_markers
 from lettersign.project import ProjectPaths
+from lettersign.render_scad import write_scad_outputs
 from lettersign.render_svg import render_centerline_svg
+from lettersign.scad_geometry import build_scad_model
 from lettersign.svg_input import load_svg_input
 
 # Align with legacy `lettersign.centerline` default preset tuning (millimeter space).
@@ -28,7 +30,7 @@ def _normalized_view_box_mm(svg_input: SvgInput) -> tuple[float, float, float, f
 
 
 def build_centerline_preview(paths: ProjectPaths, config: ProjectConfig) -> Path:
-    """Load project SVG, compute centerline and markers, write normalized preview SVG.
+    """Load project SVG, compute geometry, write normalized centerline SVG and SCAD artifacts.
 
     Caller must ensure ``paths.input_svg`` exists (``cli.cmd_build`` checks first).
     """
@@ -60,6 +62,16 @@ def build_centerline_preview(paths: ProjectPaths, config: ProjectConfig) -> Path
         led_channel_width=config.led_channel_width,
     )
 
+    model = build_scad_model(
+        project_name=paths.project_dir.name,
+        svg_input=svg_input,
+        outline=geom.outline,
+        centerline=geom.centerline,
+        markers=markers,
+        config=config,
+    )
+
     paths.centerline_svg.parent.mkdir(parents=True, exist_ok=True)
     paths.centerline_svg.write_text(svg_text, encoding="utf-8")
+    write_scad_outputs(paths, model)
     return paths.centerline_svg

@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 from lettersign.config import load_or_create_config
 from lettersign.pipeline import build_centerline_preview
 from lettersign.project import resolve_project
+from lettersign.render_scad import GENERATED_DATA_SCAD_COMMENT
 
 MINIMAL_CLOSED_SVG = textwrap.dedent(
     """\
@@ -82,3 +83,112 @@ def test_build_centerline_preview_uses_led_channel_width_from_config(tmp_path: P
     paths_el = _svg_elements(cfg_root, "path")
     _, centerline_path = paths_el
     assert float(centerline_path.get("stroke-width", "0")) == 7.5
+
+
+def test_build_centerline_preview_writes_scad_outputs(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    name = "demo"
+    paths = resolve_project(name, projects_root=root)
+    paths.project_dir.mkdir(parents=True)
+    paths.input_svg.write_text(MINIMAL_CLOSED_SVG, encoding="utf-8")
+    paths.config_toml.write_text(
+        "# Lettersign project configuration (lengths in millimeters).\n\n",
+        encoding="utf-8",
+    )
+    config = load_or_create_config(paths.config_toml)
+
+    build_centerline_preview(paths, config)
+
+    assert paths.data_scad.is_file()
+    assert paths.wrapper_scad.is_file()
+    assert paths.common_scad.is_file()
+
+    data = paths.data_scad.read_text(encoding="utf-8")
+    assert data.splitlines()[0] == f"// {GENERATED_DATA_SCAD_COMMENT}"
+    assert "use <../lettersign_common.scad>" in data
+    for mod in (
+        "module path1_outline()",
+        "module path1_channel()",
+        "module path1_posts()",
+        "module path1_3d()",
+    ):
+        assert mod in data
+
+    wrapper = paths.wrapper_scad.read_text(encoding="utf-8")
+    assert "use <demo_data.scad>" in wrapper
+    assert "demo_3d();" in wrapper
+
+
+def test_build_centerline_preview_preserves_wrapper_on_rebuild(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    name = "demo"
+    paths = resolve_project(name, projects_root=root)
+    paths.project_dir.mkdir(parents=True)
+    paths.input_svg.write_text(MINIMAL_CLOSED_SVG, encoding="utf-8")
+    paths.config_toml.write_text(
+        "# Lettersign project configuration (lengths in millimeters).\n\n",
+        encoding="utf-8",
+    )
+    config = load_or_create_config(paths.config_toml)
+
+    build_centerline_preview(paths, config)
+    sentinel = "// user customized wrapper --- keep on rebuild\nuse <other.scad>\n\n"
+    paths.wrapper_scad.write_text(sentinel, encoding="utf-8")
+
+    build_centerline_preview(paths, config)
+
+    assert paths.wrapper_scad.read_text(encoding="utf-8") == sentinel
+    assert "module path1_outline()" in paths.data_scad.read_text(encoding="utf-8")
+
+
+def test_build_twice_refreshes_data_scad_while_preserving_custom_wrapper(tmp_path: Path) -> None:
+    """Second build refreshes generated data SCAD without touching a user-edited wrapper."""
+    root = tmp_path / "projects"
+    name = "demo"
+    paths = resolve_project(name, projects_root=root)
+    paths.project_dir.mkdir(parents=True)
+    paths.input_svg.write_text(MINIMAL_CLOSED_SVG, encoding="utf-8")
+    paths.config_toml.write_text(
+        "# Lettersign project configuration (lengths in millimeters).\n\nheight = 12.0\n",
+        encoding="utf-8",
+    )
+    config = load_or_create_config(paths.config_toml)
+    build_centerline_preview(paths, config)
+
+    first_data = paths.data_scad.read_text(encoding="utf-8")
+
+    sentinel = "// two-build sentinel - must survive second build\nuse <other.scad>\n\n"
+    paths.wrapper_scad.write_text(sentinel, encoding="utf-8")
+
+    paths.config_toml.write_text(
+        "# Lettersign project configuration (lengths in millimeters).\n\nheight = 24.5\n",
+        encoding="utf-8",
+    )
+    config_second = load_or_create_config(paths.config_toml)
+    build_centerline_preview(paths, config_second)
+
+    assert paths.wrapper_scad.read_text(encoding="utf-8") == sentinel
+
+    second_data = paths.data_scad.read_text(encoding="utf-8")
+    assert "demo_height = 24.5" in second_data
+    assert second_data != first_data
+    assert f"// {GENERATED_DATA_SCAD_COMMENT}" in second_data
+
+
+def test_build_writes_common_scad_at_projects_root_not_inside_project(tmp_path: Path) -> None:
+    """Shared helper stays at `<projects_root>/lettersign_common.scad`, not under `<name>/`."""
+    root = tmp_path / "projects"
+    name = "demo"
+    paths = resolve_project(name, projects_root=root)
+    paths.project_dir.mkdir(parents=True)
+    paths.input_svg.write_text(MINIMAL_CLOSED_SVG, encoding="utf-8")
+    paths.config_toml.write_text(
+        "# Lettersign project configuration (lengths in millimeters).\n\n",
+        encoding="utf-8",
+    )
+    config = load_or_create_config(paths.config_toml)
+    build_centerline_preview(paths, config)
+
+    assert paths.common_scad.is_file()
+    assert paths.common_scad.parent.resolve() == root.resolve()
+    assert not paths.common_scad.resolve().is_relative_to(paths.project_dir.resolve())

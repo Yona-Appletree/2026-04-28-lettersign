@@ -22,6 +22,9 @@ lettersign = "lettersign.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+lettersign = ["scad/*.scad"]
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.9"]
 

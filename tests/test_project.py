@@ -65,7 +65,14 @@ def test_resolve_project_paths_layout(tmp_path: Path) -> None:
         centerline_svg=root / "demo" / "demo.centerline.svg",
         data_scad=root / "demo" / "demo_data.scad",
         wrapper_scad=root / "demo" / "demo.scad",
+        common_scad=root / "lettersign_common.scad",
     )
+
+
+def test_resolve_project_common_scad_at_projects_root(tmp_path: Path) -> None:
+    root = tmp_path / "myprojects"
+    expected = root / "lettersign_common.scad"
+    assert resolve_project("demo", projects_root=root).common_scad == expected
 
 
 def test_resolve_project_validates_name(tmp_path: Path) -> None:

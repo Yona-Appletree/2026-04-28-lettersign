@@ -1,4 +1,4 @@
-"""Tests for domain-driven centerline generation (SvgInput → Shapely)."""
+"""Tests for domain-driven centerline generation (SvgInput to Shapely)."""
 
 from __future__ import annotations
 

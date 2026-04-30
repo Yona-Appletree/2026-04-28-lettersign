@@ -19,6 +19,7 @@ class ProjectPaths:
     centerline_svg: Path
     data_scad: Path
     wrapper_scad: Path
+    common_scad: Path
 
 
 def validate_project_name(name: str) -> str:
@@ -61,4 +62,5 @@ def resolve_project(project_name: str, *, projects_root: Path = Path("projects")
         centerline_svg=project_dir / f"{safe_name}.centerline.svg",
         data_scad=project_dir / f"{safe_name}_data.scad",
         wrapper_scad=project_dir / f"{safe_name}.scad",
+        common_scad=root / "lettersign_common.scad",
     )
